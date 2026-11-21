@@ -1,16 +1,85 @@
-# React + Vite
+# Harbor Support: AI Customer Support Web App
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A full-stack customer support app. Customers chat on a React website, and an n8n workflow classifies each message with an LLM, creates tickets for urgent issues, and sends a reply back to the chat.
 
-Currently, two official plugins are available:
+## How it works
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```
+React chat page
+      |  POST /webhook/support-chat  { message, sessionId, userEmail }
+      v
+n8n workflow
+  Webhook -> LLM classifier (Gemini) -> Code (parse JSON) -> Respond to Webhook
+                                              |
+                                              +-> Supabase (tickets table)
+      |
+      v  { reply, intent, urgency, escalated, ticketId }
+React chat page (shows intent and ticket badges)
+```
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Chat page with session tracking, typing indicator and error handling
+- Message classification by intent (billing, bug, account, shipping, faq, complaint, other) and urgency (low, medium, high)
+- Fallback when the AI returns malformed JSON, so the chat never breaks
+- Ticket rows saved in Supabase (PostgreSQL)
+- Badges in the chat for intent, urgent messages and created tickets
+- Mock replies when no webhook URL is set, so the frontend runs on its own
 
-## Expanding the Oxlint configuration
+## Tech stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+| Layer | Technology |
+|---|---|
+| Frontend | React (Vite), React Router, CSS |
+| Automation | n8n |
+| AI | Google Gemini |
+| Database | Supabase (PostgreSQL) |
+
+## API contract
+
+Request:
+```json
+{ "message": "How can I get a refund?", "sessionId": "abc123", "userEmail": "user@mail.com" }
+```
+
+Response:
+```json
+{ "reply": "...", "intent": "billing", "urgency": "low", "escalated": false, "ticketId": null }
+```
+
+## Run it locally
+
+1. Install dependencies:
+   ```
+   npm install
+   ```
+2. Copy `.env.example` to `.env` and set your n8n webhook URL:
+   ```
+   VITE_N8N_WEBHOOK_URL=https://your-n8n-host/webhook/support-chat
+   ```
+   Leave it empty to use built-in mock replies.
+3. Start the app:
+   ```
+   npm run dev
+   ```
+
+## Set up the backend
+
+1. Create a Supabase project and run the SQL in `supabase/schema.sql`.
+2. Import `n8n/workflow.json` into n8n.
+3. Add your own credentials in n8n: a Gemini API key and a Supabase service role key.
+4. Publish the workflow and use its Production URL in `.env`.
+
+Keep API keys inside n8n. Never put them in the React app or commit them to this repo.
+
+## Roadmap
+
+- [ ] Route messages with an IF/Switch node so only urgent issues, bugs and complaints create tickets
+- [ ] FAQ answers from a knowledge base (RAG with a Supabase vector store)
+- [ ] FAQ page and My Tickets page reading from Supabase
+- [ ] Admin dashboard with ticket and intent charts
+- [ ] Chat logging table and error-alert workflow
+
+## Screenshots
+
+Add screenshots of the chat page, the n8n workflow canvas and the Supabase tickets table here.
