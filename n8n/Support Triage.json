@@ -1,0 +1,435 @@
+{
+  "name": "Support Triage",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "support-chat",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "0cd4912c-a505-4f09-b8e1-7db53407b728",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "29eff126-56a4-4190-9b1b-0567306c5ffd"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a1b2c3d4-0001-4000-8000-000000000001",
+              "leftValue": "={{ (($json.body && $json.body.message) || \"\").toString().trim() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a33cbfa7-3d30-4aca-b7b6-aeed6acb169c",
+      "name": "Has Message",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.message }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": " You are Harbor Support's AI assistant.  Analyze the customer's message and return ONLY valid JSON.  Include these fields: {   \"intent\": \"billing, bug, account, technical, or other\",   \"urgency\": \"high, medium, or low\",   \"reply\": \"A helpful response to the customer\",   \"escalated\": true or false }  Rules: - Urgent complaints involving fraud, duplicate charges, or hacked accounts: high urgency and escalated true. - Bugs and technical issues: medium urgency. - Routine questions: low urgency. - Give a helpful, natural response. - Return JSON only. No Markdown."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "id": "b42079b5-2b81-4b35-bcb9-8f6d541fab2a",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        448,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "82226b0d-a5e9-4d40-a984-7a0e133ee5e5",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1536,
+        240
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst input = $input.first().json;\n\nconst raw = input.text || input.output || \"\";\nconst clean = raw.replace(/```json|```/g, \"\").trim();\n\nlet d;\n\ntry {\n  d = JSON.parse(clean);\n} catch (e) {\n  d = {\n    intent: \"other\",\n    urgency: \"medium\",\n    reply: \"Sorry, I am having trouble analysing your message right now. Please try again in a moment.\",\n    escalated: false\n  };\n}\n\nconst webhook = $(\"Webhook\").first().json.body || {};\n\nreturn [{\n  json: {\n    message: webhook.message || \"\",\n    session_id: webhook.sessionId || \"default-session\",\n    user_email: webhook.userEmail || \"\",\n    intent: d.intent || \"other\",\n    urgency: d.urgency || \"medium\",\n    reply: d.reply || \"\",\n    escalated: d.escalated === true || d.escalated === \"true\"\n  }\n}];\n"
+      },
+      "id": "657e94fc-fe1d-4a73-a2f2-5d627f88ac58",
+      "name": "Code in JavaScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a1b2c3d4-0002-4000-8000-000000000002",
+              "leftValue": "={{ $json.escalated }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "24a0b3dd-2b16-4d6f-8f27-9a05e0f867e3",
+      "name": "Is Escalated",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        928,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "tickets",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.message }}"
+            },
+            {
+              "fieldId": "intent",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.intent }}"
+            },
+            {
+              "fieldId": "urgency",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.urgency }}"
+            },
+            {
+              "fieldId": "session_id",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.session_id }}"
+            },
+            {
+              "fieldId": "user_email",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.user_email }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "Open"
+            }
+          ]
+        }
+      },
+      "id": "ed20ff03-b51b-42ea-83dc-8465f1fb4567",
+      "name": "Create Ticket",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        -176
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "vmY6y0Icz7M7FwWX",
+          "name": "Supabase account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "chat_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "session_id",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.session_id }}"
+            },
+            {
+              "fieldId": "message",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.message }}"
+            },
+            {
+              "fieldId": "reply",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.reply }}"
+            },
+            {
+              "fieldId": "intent",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.intent }}"
+            },
+            {
+              "fieldId": "urgency",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.urgency }}"
+            },
+            {
+              "fieldId": "escalated",
+              "fieldValue": "={{ $('Code in JavaScript').first().json.escalated }}"
+            },
+            {
+              "fieldId": "ticket_id",
+              "fieldValue": "={{ ($('Create Ticket').isExecuted && $('Create Ticket').first().json.id) ? $('Create Ticket').first().json.id : null }}"
+            }
+          ]
+        }
+      },
+      "id": "d8038759-13df-4124-9da1-217c6772c2cd",
+      "name": "Create a row",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1424,
+        0
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "vmY6y0Icz7M7FwWX",
+          "name": "Supabase account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ reply: $('Code in JavaScript').first().json.reply, intent: $('Code in JavaScript').first().json.intent, urgency: $('Code in JavaScript').first().json.urgency, escalated: $('Code in JavaScript').first().json.escalated, ticketId: ($('Create Ticket').isExecuted && $('Create Ticket').first().json.id) ? $('Create Ticket').first().json.id : null, ticketStatus: !$('Create Ticket').isExecuted ? 'not_required' : ($('Create Ticket').first().json.id ? 'created' : 'failed'), ticketError: ($('Create Ticket').isExecuted && !$('Create Ticket').first().json.id) ? String($('Create Ticket').first().json.error || $('Create Ticket').first().json.message || 'Ticket creation failed') : null }) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "cdb8e5f7-c25c-4407-8ed7-a1a0daad1a9c",
+      "name": "Respond to Webhook1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1712,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: \"Message is required\", reply: \"Please type a message so I can help.\", intent: \"other\", urgency: \"low\", escalated: false }) }}",
+        "options": {
+          "responseCode": 400,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "7b77a229-3320-474b-9449-4817bb7eda4b",
+      "name": "Respond Empty Message",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        544,
+        288
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Has Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Message": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Empty Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Is Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Escalated": {
+      "main": [
+        [
+          {
+            "node": "Create Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Ticket": {
+      "main": [
+        [
+          {
+            "node": "Create a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a row": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "f2747c89-a383-44f5-b190-48ffc9256577",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8238e5fcd98a0c6de27f584b8890480843b55a73334c22f2e1d33c792d863e4b"
+  },
+  "nodeGroups": [
+    {
+      "id": "f5fa0fa5-a933-4ca3-b12e-a3da02afd3b8",
+      "name": "Classify message",
+      "nodeIds": [
+        "b42079b5-2b81-4b35-bcb9-8f6d541fab2a",
+        "82226b0d-a5e9-4d40-a984-7a0e133ee5e5",
+        "657e94fc-fe1d-4a73-a2f2-5d627f88ac58"
+      ],
+      "description": "Receives a non-empty chat message, asks Gemini for intent, urgency, reply and escalation, and parses the JSON."
+    },
+    {
+      "id": "d9376b03-59db-4e9c-8a92-d8f8bc86d6e8",
+      "name": "Log and reply",
+      "nodeIds": [
+        "d8038759-13df-4124-9da1-217c6772c2cd",
+        "cdb8e5f7-c25c-4407-8ed7-a1a0daad1a9c"
+      ],
+      "description": "Saves every conversation to the chat log, then answers the chat app with the AI reply and ticket details."
+    }
+  ],
+  "id": "oXJxWqmXczOZeAOb",
+  "tags": []
+}
